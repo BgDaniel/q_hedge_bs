@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from black_scholes import HedgeEuropeanCallBS
 from q_learning import Agent
 
-bs_hedge = HedgeEuropeanCallBS(nbSimus=1000, nbSteps=2000, S0=1.0, B0=1.0, sigma=.3, r=.04, T=1.0, N=1000, K=.8)
+bs_hedge = HedgeEuropeanCallBS(nbSimus=1000, nbSteps=2000, S0=1.0, B0=1.0, sigma=.3, r=.04, T=1.0, N=1, K=.8)
 #_1, _2, value_hedge, value_analytical = bs_hedge.hedge()
 
 #plt.plot(value_hedge[0])

@@ -1,4 +1,5 @@
 import numpy as np
+import math
 import random as rnd
 from black_scholes import HedgeEuropeanCallBS
 from helpers import *
@@ -28,7 +29,7 @@ class Agent:
         self._epsilon_min = epsilon_min,
         self._epilson_decay = epsilon_decay
 
-        self._S_int, self._B_int = self.interpolate()
+        self._B_int, self._S_int = self.interpolate()
         self._S_mapped = self.map_to_state_space()
 
         self._actions = np.linspace(self._nb_S_lower, self._nb_S_upper, self._nb_S_steps)
@@ -65,11 +66,13 @@ class Agent:
             nb_S = np.zeros((self._nb_steps_t))
             value_hedge = np.zeros((self._nb_steps_t))
             value_hedge[0] = self._european_call.price(.0, self._S0) 
+            action = 0
 
             if rnd.uniform(0, 1) > self._epsilon:
                 action = np.argmax(self._q_table[0:self._S_mapped[0:i_path]])
             else:
-                nb_S[0] = self._actions[rnd.randint(0, len(self._actions) - 1)]
+                action = rnd.randint(0, len(self._actions) - 1)
+                nb_S[0] = self._actions[action]
 
             nb_B[0] = (value_hedge[0] - nb_S[0] * self._S[i_path,0]) / self._B[0]
 
@@ -80,7 +83,12 @@ class Agent:
                 value_hedge_real = self._european_call.price( i_time * self._delta_t, S[i_time, i_path]) 
 
                 # compute reward
-                hedge_loss = value_hedge[i_time]
+                hedge_loss = value_hedge_real - value_hedge[i_time]
+                reward = 1.0 - math.exp(- 3.0 * math.abs(hedge_loss))
+
+                # update q_table
+                self._q_table[0:self._S_mapped[0:i_path]:action] = (1.0 - self._learning_rate) * self._q_table[0:self._S_mapped[0:i_path]:action] \
+                    + self._learning_rate * (reward + self._gamma * )
                 
                 nb_S = .0
 
