@@ -22,6 +22,11 @@ class BlackScholesModel:
     def Dt(self):
         return self._dt
 
+
+    @property
+    def T(self):
+        return self._T
+
     def __init__(self, nbSimus, nbSteps, S0, B0, sigma, r, T):
         self._S0 = S0
         self._B0 = B0
@@ -33,25 +38,30 @@ class BlackScholesModel:
         self._times = np.linspace(.0, T, nbSteps)
         self._dt = float(T) / float(nbSteps)
 
-    def generate_paths(self, use_caching=True):
+    def generate_paths(self, use_caching=False):
+        B = np.zeros((self._nbSteps))
+        B[0] = self._B0
+
+        for i_time in range(1, self._nbSteps):
+            B[i_time] = B[i_time-1] + self._r * B[i_time-1] * self._dt
+        
         if use_caching:
             path_to_csv = os.path.join(os.path.dirname(__file__), 'generated_paths\\sym_{0}_{1}_{2}_{3}_{4}_{5}_{6}.csv'.format(self._S0, \
                 self._B0, self._sigma, self._r, self._T, self._nbSimus, self._nbSteps))
 
             if os.path.exists(path_to_csv):
-                data = pd.read_csv(path_to_csv)
-                S = np.array(data)
+                data = pd.read_csv(path_to_csv, sep=";")
+                S = data.values
+                S = np.delete(S, 0, 1)
+                return B, S
 
         S = np.zeros((self._nbSimus, self._nbSteps))
-        B = np.zeros((self._nbSteps))
         dt_sqrt = math.sqrt(self._dt)
        
         self._dW_t = np.random.normal(size =(self._nbSimus, self._nbSteps)) * dt_sqrt
 
         for simu in range(0, self._nbSimus):
-            S[simu,0] = self._S0
-
-        B[0] = self._B0
+            S[simu,0] = self._S0        
 
         for i_time in range(1, self._nbSteps):
             B[i_time] = B[i_time-1] + self._r * B[i_time-1] * self._dt
@@ -100,14 +110,42 @@ class HedgeEuropeanCallBS:
         return self._S
 
     @property
+    def S0(self):
+        return self._S0
+
+    @property
+    def B(self):
+        return self._B
+
+    @property
     def NbSteps(self):
         return self._nbSteps
 
+    @property
+    def Dt(self):
+        return self._dt
+
+    @property
+    def T(self):
+        return self._T
+
+    @property
+    def NbSimus(self):
+        return self._nbSimus
+
+    @property
+    def EuropeanCallBS(self):
+        return self._europeanCallBS
+
     def __init__(self, nbSimus, nbSteps, S0, B0, sigma, r, T, N, K):
         self._bs_model = BlackScholesModel(nbSimus, nbSteps, S0, B0, sigma, r, T)
+        self._S0 = self._bs_model.S0
         self._B, self._S = self._bs_model.generate_paths()
         self._nbSteps = nbSteps
         self._europeanCallBS = EuropeanCallBS(N, K, T, sigma, r)
+        self._dt = self._bs_model.Dt
+        self._T = self._bs_model.T
+        self._nbSimus = self._bs_model.NbSimus
         
     def hedge(self):
         v_B = np.zeros((self._bs_model.NbSimus, self._bs_model.NbSteps))
