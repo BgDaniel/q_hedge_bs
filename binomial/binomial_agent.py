@@ -11,22 +11,16 @@ class BinomialAgent:
         self._payoff = payoff
         self._value_0, self._hedge = model.hedge(state_0)
         
-
-        
         self._nu_S_l = nu_S_l
         self._nu_S_u = nu_S_u
         self._nu_S_steps = nu_S_steps             
        
-       
-
         self.alpha = alpha
         self._gamma = gamma
         self._epsilon = epsilon
         self._epsilon_min = epsilon_min,
         self._epilson_decay = epsilon_decay
         self._penalize_factor = penalize_factor
-
-
 
         self._nu_S = np.linspace(self._nu_S_l, self._nu_S_u, self._nu_S_steps)     
         nb_states_model = int((self._N + 2.0) * (self._N + 1.0) / 2.0)
@@ -43,7 +37,17 @@ class BinomialAgent:
         self._set_q_for(current_state, action, q_new)
 
     def _to_state(self, path, t):
-        return None
+        state = 0
+        if t == 0:
+            return state
+        for i in range(1, self._N + 1):
+            if i > t:
+                break
+            if path[i - 1] == + 1.0:
+                state += i
+            else:
+                state += (i + 1)
+        return state
 
     def _q_for(self, state):
         return self._q_table[state[0], state[1]] 
@@ -61,7 +65,7 @@ class BinomialAgent:
                 nu_S = np.zeros((self._N + 1))
                 nu_B = np.zeros((self._N + 1))
                 hedge = np.zeros((self._N + 1))
-                hedge_actual = np.zeros((self._N + 1))
+                value = np.zeros((self._N + 1))
                 
                 hedge[0] = .0
                 
@@ -69,7 +73,7 @@ class BinomialAgent:
                 i_S[0] = 0
                 nu_S[0] = self._nu_S[i_S[0]]
                 nu_B[0] = (hedge[0] - nu_S[0] * S[0]) / B[0]
-                current_state = [0, i_S]
+                current_state = [self._to_state(path, 0), i_S]
 
                 for i in range(1, self._N):
                     # choose action
@@ -78,7 +82,7 @@ class BinomialAgent:
                     else:
                         i_S_new = rnd.randint(0, self._nb_actions - 1)
 
-                    next_state = [current_state[0], i_S_new]
+                    next_state = [0, i_S_new]
                         
                     nu_S[i-1] = self._nu_S[i_S_new]
                     nu_B[i-1] = (hedge[i-1] - nu_S[i-1] * S[i-1]) / B[i-1]                
@@ -91,7 +95,8 @@ class BinomialAgent:
                     # update q_table
                     self._update_q_(current_state, next_state, i_S_new, reward)
 
-                    current_state = 
+                    # update state
+                    current_state = [self._to_state(path, i), i_S_new]
                     
             if self._epsilon >= self._epsilon_min:
                 self._epsilon *= self._epsilon_decay
