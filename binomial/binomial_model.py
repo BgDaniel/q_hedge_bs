@@ -3,58 +3,23 @@ import numpy as np
 import copy as cp
 import random as rnd
 
-class Hedge:
-    def __init__(self, payoff, binomialModel, hedge):
-        self._payoff = payoff
-        self._model = binomialModel
-        self._hedge = hedge
-
-    def roll_out(self, path):
-        n_0 = path[0][0]
-        N = self._model.N
-        value_hedge = np.zeros((N - n_0))
-        value_payoff = np.zeros((N - n_0))
-
-        for i in range(0, N - n_0):
-            value_hedge[i] = self._model._S()
-
-        value_hedge = np.zeros(())
-        value = np.zeros(())
-
-class State:
-    @property
-    def M(self):
-        return self._m
-    
-    @property
-    def N(self):
-        return self._t
-
-    def __init__(self, n, m):
-        self._m = m
-        self._n = n
-
-    def __hash__(self):
-        hash = 3541
-        hash += 2953 * int(self._m) 
-        hash += 3001 * int(self._n)
-        return hash
-    
 class BinomialModel:
     @property 
     def N(self):
         return self._N
 
-    def __init__(self, r, sigma, dt, T, N, S0 , B0):
+    def __init__(self, r, sigma, T, N, S0=1.0, B0=1.0):
         self._r = r
         self._sigma = sigma
         self._dt = float(T) / float(N)
         self._T = T
+        self._N = N
         self._S0 = S0
         self._B0 = B0
         self._u = math.exp(self._sigma * math.sqrt(self._dt))
         self._d = 1.0 / self._u
-        self._qUp = (math.exp(r * dt) + math.exp(- sigma * math.sqrt(dt))) / (math.exp(sigma * math.sqrt(dt)) - math.exp(- sigma * math.sqrt(dt)))
+        self._qUp = (math.exp(r * self._dt) - math.exp(- sigma * math.sqrt(self._dt))) / \
+            (math.exp(sigma * math.sqrt(self._dt)) - math.exp(- sigma * math.sqrt(self._dt)))
         self._qDown = 1.0 - self._qUp
 
     def random_paths(self, nb_simus=1000):
@@ -87,44 +52,72 @@ class BinomialModel:
     def _value(self, v_up, v_down):
         return math.exp(- self._r * self._dt) * (self._qUp * v_up + self._qDown * v_down)
     
-    def _S(self, state):
-        n = state.n
-        m = state.M
-        assert m >= 0 and m <= n, 'Wrong input!'
+    def _S(self, t, m):
+        assert m >= 0 and m <= t, 'Wrong input!'
         S = self._S0
 
-        for i in range(0, m - 1):
+        for i in range(0, m): # m times up
+            print(i)
             S *= self._u
+
+        for j in range(0, t - m): # N - m times down
+            print(j)
+            S *= self._d
 
         return S
 
-    def _B(self, state):
-        n = state.n
+    def _B(self, t):
         B = self._B0
 
-        for i in range(0, n - 1):
-            B *= math.exp(self._dt)
+        for i in range(0, t):
+            B *= math.exp(self._r * self._dt)
 
         return B
 
-    def hedge(self, state, payoff):
-        n, m = state.N, state.M #states for time n: 0,...,n
-        v_up, v_down, S_up, S_down = .0, .0, .0, .0
-        hedge_up, hedge_down = [], []
-        state_up, state_down = State(n + 1, m + 1), State(n + 1, m)
+    def _nu_B(self, v_up, v_down, B):
+        return (- math.exp(-self._sigma * math.sqrt(self._dt)) * v_up + math.exp(self._sigma * math.sqrt(self._dt)) * v_down) / \
+                (B * (math.exp(self._sigma * math.sqrt(self._dt)) - math.exp(-self._sigma * math.sqrt(self._dt))))
+    
+    def _nu_S(self, v_up, v_down, S):
+        return (math.exp(self._r * self._dt) * v_up - math.exp(self._r * self._dt) * v_down) / \
+             (S * (math.exp(self._sigma * math.sqrt(self._dt)) - math.exp(-self._sigma * math.sqrt(self._dt))))
 
-        if self._N - n == 1:
-            S_up, S_down = self._S(state_up), self._S(state_down)
-            v_up, v_down = payoff(S_up), payoff(S_down)
-            nu_B, nu_S = self._nu_B(v_up, v_down), self._nu_S(v_up, v_down)
-            return { state : [ self._value(v_up, v_down), nu_B, nu_S] }
-        else:
-            v_up, hedge_up = self.hedge(state_up, payoff)
-            v_down, hedge_down = self.hedge(state_down, payoff)
-            nu_B, nu_S = self._nu_B(v_up, v_down), self._nu_S(v_up, v_down)            
-            hedge = self._update_hedge(hedge_up, hedge_down, { state : [nu_B, nu_S]})
-            value = self._value(v_up, v_down)
-            return value, hedge
+class Hedge:
+    def __init__(self, model, payoff):
+        self._model = model
+        self._payoff = payoff
+
+    def hedge(self):
+        hedge = []
+        N = self._model.N
+   
+        for i_t, t in enumerate(range(self._model.N - 1, -1, -1)):
+            hedge_t = np.zeros((t + 1, 5))
+            for m in range(0, t + 1):
+                S = self._model._S(t, m)
+                B = self._model._B(t)                
+                if t == N - 1:
+                    S_up, S_down = self._model._S(N, m + 1), self._model._S(N, m)
+                    v_up, v_down = self._payoff(S_up), self._payoff(S_down)
+                else:
+                    v_up, v_down = hedge[i_t - 1][m + 1, 0], hedge[i_t - 1][m, 0]
+                value = self._model._value(v_up, v_down)
+                nu_B, nu_S = self._model._nu_B(v_up, v_down, B), self._model._nu_S(v_up, v_down, S)
+                hedge_t[m] = np.array([value, nu_B, nu_S, B, S])
+            
+            hedge.append(hedge_t)
+
+        return hedge.reverse()
+
+    def _roll_out(self, hedge, path): # for validation purpose
+        N = self._model.N
+        value_0 = hedge[0][0]
+        nu_B_0, nu_S_0 = hedge[0][1], hedge[0][2]
+
+        for t in range(1, N + 1):
+            S = self._model._S(t, m)
+            B = self._model._B(t) 
+
 
     def _nu_B(self, v_up, v_down):
         return (math.exp(-self._sigma * math.sqrt(self._dt)) * v_up + math.exp(self._sigma * math.sqrt(self._dt)) * v_down) / \

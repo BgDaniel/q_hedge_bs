@@ -55,6 +55,13 @@ class BinomialAgent:
     def _set_q_for(self, state, action, value):
         self._q_table[state[0], state[1], action] = value
 
+    def hedge(self, path):
+        for i in range(0, self._N + 1):
+            state = self._to_state(path, i)
+            i_S = np.argmax(self._q_for(state))
+            nu_S = self._nu_S[i_S]
+
+
     def train(self, episodes):
         for paths in episodes:
             for path in paths:
@@ -75,7 +82,7 @@ class BinomialAgent:
                 nu_B[0] = (hedge[0] - nu_S[0] * S[0]) / B[0]
                 current_state = [self._to_state(path, 0), i_S]
 
-                for i in range(1, self._N):
+                for i in range(1, self._N + 1):
                     # choose action
                     if rnd.uniform(0, 1) > self._epsilon:
                         i_S_new = np.argmax(self._q_for(current_state))
