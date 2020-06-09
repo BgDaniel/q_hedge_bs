@@ -1,7 +1,8 @@
 import math
 from binomial_model import *
 
-model = BinomialModel(r=.01, sigma=.2, T=1.0, N=5)
+model = BinomialModel(r=.01, sigma=.2, T=1.0, N=10)
+paths = model.random_paths(20000)
 
 def call(K):
     def _call(S):
@@ -9,6 +10,9 @@ def call(K):
     return _call
 
 hedge = Hedge(model, call(1.0))
-hedge = hedge.hedge()
+_hedge = hedge.hedge()
+
+for path in paths:
+    hedge.roll_out(_hedge, path)
 
 

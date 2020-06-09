@@ -23,9 +23,9 @@ class BinomialModel:
         self._qDown = 1.0 - self._qUp
 
     def random_paths(self, nb_simus=1000):
-        paths = np.zeros((nb_simus, self._N + 1))
+        paths = np.zeros((nb_simus, self._N))
         for i in range(0, nb_simus):
-            path = np.zeros((self._N + 1))
+            path = np.zeros((self._N))
             for j in range(0, self._N):
                 jump = rnd.randint(0, 1)
                 if jump == 1:
@@ -38,14 +38,14 @@ class BinomialModel:
     def _to_S(self, path):
         S = np.zeros((len(path)+1))
         S[0] = self._S0
-        for j in range(1,len(path)):
-            S[j] = S[j-1] * (self._u ** path[j])
+        for j in range(1,len(path)+1):
+            S[j] = S[j-1] * (self._u ** path[j-1])
         return S
     
     def _to_B(self, path):
         B = np.zeros((len(path)+1))
         B[0] = self._B0
-        for j in range(1,len(path)):
+        for j in range(1,len(path)+1):
             B[j] = B[j-1] * math.exp(self._r * self._dt)
         return B
   
@@ -76,11 +76,23 @@ class BinomialModel:
 
     def _nu_B(self, v_up, v_down, B):
         return (- math.exp(-self._sigma * math.sqrt(self._dt)) * v_up + math.exp(self._sigma * math.sqrt(self._dt)) * v_down) / \
-                (B * (math.exp(self._sigma * math.sqrt(self._dt)) - math.exp(-self._sigma * math.sqrt(self._dt))))
+                (B * (math.exp(self._sigma * math.sqrt(self._dt) + self._r * self._dt) - math.exp(-self._sigma * math.sqrt(self._dt) + self._r * self._dt)))
     
     def _nu_S(self, v_up, v_down, S):
-        return (math.exp(self._r * self._dt) * v_up - math.exp(self._r * self._dt) * v_down) / \
+        return (v_up - v_down) / \
              (S * (math.exp(self._sigma * math.sqrt(self._dt)) - math.exp(-self._sigma * math.sqrt(self._dt))))
+
+    def _decode_path(self, path):
+        states = np.zeros((self._N + 1))
+        n = 0
+        m = 0
+        states[0] = 0
+        for i in range(0, self._N):
+            if path[i] == + 1.0:
+                m += 1
+            states[i + 1] = m
+        return states
+
 
 class Hedge:
     def __init__(self, model, payoff):
@@ -107,17 +119,33 @@ class Hedge:
             
             hedge.append(hedge_t)
 
-        return hedge.reverse()
+        hedge.reverse()
 
-    def _roll_out(self, hedge, path): # for validation purpose
+        return hedge
+
+    def roll_out(self, hedge, path): # for validation purpose
         N = self._model.N
-        value_0 = hedge[0][0]
-        nu_B_0, nu_S_0 = hedge[0][1], hedge[0][2]
+        value_0 = hedge[0][0][0]
+        nu_B_0, nu_S_0 = hedge[0][0][1], hedge[0][0][2]
+        _path = self._model._decode_path(path)
+        S = self._model._to_S(path)
+        B = self._model._to_B(path)
+        nu_B = hedge[0][0,1]
+        nu_S = hedge[0][0,2]
 
-        for t in range(1, N + 1):
-            S = self._model._S(t, m)
-            B = self._model._B(t) 
+        value = nu_B * B[0] + nu_S * S[0]
+        assert abs(value - value_0) < 1e-7, 'Deviation in hedge!'
+        
+        for t in range(1, N):
+            value = nu_B * B[t] + nu_S * S[t]
+            nu_B = hedge[t][int(_path[t]),1]
+            nu_S = hedge[t][int(_path[t]),2]
+            value_new = nu_B * B[t] + nu_S * S[t]
+            assert abs(value_new - value) < 1e-7, 'Deviation in hedge!'
 
+        value = nu_B * B[N] + nu_S * S[N]
+        value_payoff = self._payoff(S[N])
+        assert abs(value_payoff - value) < 1e-7, 'Deviation in hedge!'
 
     def _nu_B(self, v_up, v_down):
         return (math.exp(-self._sigma * math.sqrt(self._dt)) * v_up + math.exp(self._sigma * math.sqrt(self._dt)) * v_down) / \
