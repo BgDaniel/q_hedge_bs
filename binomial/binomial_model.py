@@ -63,11 +63,9 @@ class BinomialModel:
         S = self._S0
 
         for i in range(0, m): # m times up
-            print(i)
             S *= self._u
 
         for j in range(0, t - m): # N - m times down
-            print(j)
             S *= self._d
 
         return S
@@ -90,7 +88,6 @@ class BinomialModel:
 
     def _decode_path(self, path):
         states = np.zeros((self._N + 1))
-        n = 0
         m = 0
         states[0] = 0
         for i in range(0, self._N):
@@ -129,29 +126,34 @@ class Hedge:
 
         return hedge
 
-    def roll_out(self, hedge, path): # for validation purpose
+    def roll_out(self, hedge_strategy, path): # for validation purpose
         N = self._model.N
-        value_0 = hedge[0][0][0]
-        nu_B_0, nu_S_0 = hedge[0][0][1], hedge[0][0][2]
+        value_hedge = np.zeros((N + 1))
+        value_hedge[0] = hedge_strategy[0][0,0]
+        nu_B_0, nu_S_0 = hedge_strategy[0][0][1], hedge_strategy[0][0][2]
         _path = self._model._decode_path(path)
         S = self._model._to_S(path)
         B = self._model._to_B(path)
-        nu_B = hedge[0][0,1]
-        nu_S = hedge[0][0,2]
+        nu_B = hedge_strategy[0][0,1]
+        nu_S = hedge_strategy[0][0,2]
 
         value = nu_B * B[0] + nu_S * S[0]
-        assert abs(value - value_0) < 1e-7, 'Deviation in hedge!'
+        assert abs(value - value_hedge[0]) < 1e-7, 'Deviation in hedge!'
         
         for t in range(1, N):
             value = nu_B * B[t] + nu_S * S[t]
-            nu_B = hedge[t][int(_path[t]),1]
-            nu_S = hedge[t][int(_path[t]),2]
+            nu_B = hedge_strategy[t][int(_path[t]),1]
+            nu_S = hedge_strategy[t][int(_path[t]),2]
             value_new = nu_B * B[t] + nu_S * S[t]
             assert abs(value_new - value) < 1e-7, 'Deviation in hedge!'
+            value_hedge[t] = value
 
         value = nu_B * B[N] + nu_S * S[N]
         value_payoff = self._payoff(S[N])
         assert abs(value_payoff - value) < 1e-7, 'Deviation in hedge!'
+        value_hedge[N] = value
+
+        return value_hedge
 
     def _nu_B(self, v_up, v_down):
         return (math.exp(-self._sigma * math.sqrt(self._dt)) * v_up + math.exp(self._sigma * math.sqrt(self._dt)) * v_down) / \
