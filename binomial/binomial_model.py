@@ -35,6 +35,12 @@ class BinomialModel:
             paths[i] = path
         return paths
 
+    def get_episodes(self, nb_epsiodes=20, nb_simus=1000):
+        episodes = []
+        for i in range(0, nb_epsiodes):
+            episodes.append(self.random_paths(nb_simus))
+        return episodes
+
     def _to_S(self, path):
         S = np.zeros((len(path)+1))
         S[0] = self._S0

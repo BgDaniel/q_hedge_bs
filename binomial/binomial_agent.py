@@ -3,19 +3,17 @@ import random as rnd
 import math
 
 class BinomialAgent:
-    def __init__(self, model, payoff, state_0, alpha, gamma, epsilon, epsilon_decay, epsilon_min, \
-        penalize_factor, nb_steps_S, nb_steps_t, percentile_S, nu_S_l, nu_S_u, nu_S_steps):
+    def __init__(self, model, hedge, alpha, gamma, epsilon, epsilon_decay, epsilon_min, penalize_factor, \
+        nu_S_l, nu_S_u, nu_S_steps):
         self._model = model
         self._N = model.N
-        
-        self._payoff = payoff
-        self._value_0, self._hedge = model.hedge(state_0)
+        self._hedge = hedge
         
         self._nu_S_l = nu_S_l
         self._nu_S_u = nu_S_u
         self._nu_S_steps = nu_S_steps             
        
-        self.alpha = alpha
+        self._alpha = alpha
         self._gamma = gamma
         self._epsilon = epsilon
         self._epsilon_min = epsilon_min,
@@ -24,7 +22,7 @@ class BinomialAgent:
 
         self._nu_S = np.linspace(self._nu_S_l, self._nu_S_u, self._nu_S_steps)     
         nb_states_model = int((self._N + 2.0) * (self._N + 1.0) / 2.0)
-        self._q_table = np.zeros((nb_states_model,len(self._nu_S),self._nb_actions))
+        self._q_table = np.zeros((nb_states_model,len(self._nu_S),len(self._nu_S)))
 
     def _reward(self, hedge_derivation):
         return 1.0 - math.exp(- self._penalize_factor * math.abs(hedge_derivation))
@@ -33,7 +31,7 @@ class BinomialAgent:
         Q = self._q_for[current_state][action]                        
         max_next_q = np.argmax(self._q_for[next_state])        
         P = reward + self._gamma * max_next_q
-        q_new = (1.0 - self._alpha) * Q + self._alpa * P
+        q_new = (1.0 - self._alpha) * Q + self._alpha * P
         self._set_q_for(current_state, action, q_new)
 
     def _to_state(self, path, t):
