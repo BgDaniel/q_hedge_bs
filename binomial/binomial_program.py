@@ -21,7 +21,7 @@ hedge_strategy = hedge.hedge()
 #for path in paths:
 #    hedge.roll_out(hedge_strategy, path)
 
-early_stopping = EarlyStopping(0.01, 5)
+early_stopping = EarlyStopping(0.001, 5)
 
 agent = BinomialAgent(model, hedge, hedge_strategy, alpha=.65, gamma=.65, epsilon=1.0, epsilon_decay=.85, epsilon_min=0.01, \
         penalize_factor=1.0, nu_S_l=-1.5, nu_S_u=+1.5, nu_S_steps=1000, call_backs=[early_stopping])

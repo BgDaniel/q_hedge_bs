@@ -12,7 +12,7 @@ class EarlyStopping:
         return self._delta
 
     def __init__(self, delta, iterations):
-        self._eps = delta
+        self._delta = delta
         self._iterations = iterations
 
 class BinomialAgent:
@@ -149,15 +149,17 @@ class BinomialAgent:
             if self._early_stopping != None and k + 1 >= self._early_stopping.Iterations:
                 improvements = np.empty((self._N), dtype=bool)
                 for i in range(0,self._N):
-                    for l in range(0,self._early_stopping.Iterations):
-                        i_hedge_error = hedge_error[:,i]
-                        i_last_hedge_errors = i_hedge_error[i-self._early_stopping.Iterations+1:i]
-                        min_i_last_hedge_errors = i_last_hedge_errors.min()
-                        
-                        if i_hedge_error[-1] < min_i_last_hedge_errors - self._early_stopping.Delta:
-                            improvements[i] = True 
-                        else:
-                            improvements[i] = False
+                    i_hedge_error = hedge_error[:,i]
+                    i_last_hedge_errors = i_hedge_error[k-self._early_stopping.Iterations+1:k]
+                    min_i_last_hedge_errors = i_last_hedge_errors.min()
+
+                    print(hedge_error[k,i])
+                    print(min_i_last_hedge_errors - self._early_stopping.Delta)
+
+                    if hedge_error[k,i] < min_i_last_hedge_errors - self._early_stopping.Delta:
+                        improvements[i] = True 
+                    else:
+                        improvements[i] = False
 
                 if len(np.where(improvements=False)) == self._N:
                     return hedge_error
@@ -168,6 +170,8 @@ class BinomialAgent:
         return hedge_error
 
     def hedge(self, path):
-        value_hedge = np.zeros((N + 1))
+        agent_hedge = np.zeros((self._N + 1))
+        actual_hedge = np.zeros((self._N + 1))
+        value_hedge[0] = self._hedge_strategy[0][0,0]
 
 
