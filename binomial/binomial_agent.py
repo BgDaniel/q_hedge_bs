@@ -75,12 +75,6 @@ class BinomialAgent:
     def _set_q_for(self, state, action, value):
         self._q_table[state[0], state[1], action] = value
 
-    def hedge(self, path):
-        for i in range(0, self._N + 1):
-            state = self._to_state(path, i)
-            i_S = np.argmax(self._q_for(state))
-            nu_S = self._nu_S[i_S]
-
     @staticmethod
     def find_closest(nu, _nu):
         if _nu <= nu[0]:
@@ -153,15 +147,12 @@ class BinomialAgent:
                     i_last_hedge_errors = i_hedge_error[k-self._early_stopping.Iterations+1:k]
                     min_i_last_hedge_errors = i_last_hedge_errors.min()
 
-                    print(hedge_error[k,i])
-                    print(min_i_last_hedge_errors - self._early_stopping.Delta)
-
                     if hedge_error[k,i] < min_i_last_hedge_errors - self._early_stopping.Delta:
                         improvements[i] = True 
                     else:
                         improvements[i] = False
 
-                if len(np.where(improvements=False)) == self._N:
+                if not np.any(improvements==True):                    
                     return hedge_error
                     
             if self._epsilon >= self._epsilon_min:
@@ -171,7 +162,29 @@ class BinomialAgent:
 
     def hedge(self, path):
         agent_hedge = np.zeros((self._N + 1))
-        actual_hedge = np.zeros((self._N + 1))
-        value_hedge[0] = self._hedge_strategy[0][0,0]
+        actual_hedge = self._hedge.roll_out(self._hedge_strategy, path)
+        agent_hedge[0] = self._hedge_strategy[0][0,0]
+        S = self._model._to_S(path)
+        B = self._model._to_B(path) 
+        i_S = np.zeros((self._N))
+        nu_S = np.zeros((self._N))
+        nu_B = np.zeros((self._N))
+        
+        nu_S[0] = self._hedge_strategy[0][0,2]
+        i_S[0] = BinomialAgent.find_closest(self._nu_S, nu_S[0])
+        nu_S[0] = self._nu_S[int(i_S[0])]
+        nu_B[0] = (agent_hedge[0] - nu_S[0] * S[0]) / B[0]
+        pos = int(self._to_state(path, 0))
+        current_state = [pos, int(i_S[0])]
 
+        for i in range(0, self._N):
+            q_for_current_state = self._q_for(current_state)
+            i_S_new = np.argmax(self._q_for(current_state))
+            next_state = [current_state[0], i_S_new]
+            nu_S[i] = self._nu_S[i_S_new]
+            nu_B[i] = (agent_hedge[i] - nu_S[i] * S[i]) / B[i] 
+            agent_hedge[i+1]=nu_S[i] * S[i+1] + nu_B[i] * B[i+1] 
+            current_state = [self._to_state(path, i + 1), i_S_new]
+
+        return agent_hedge, actual_hedge
 

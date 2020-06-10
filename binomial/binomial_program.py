@@ -30,7 +30,11 @@ hedge_error = agent.train(epsiodes)
 
 for error in np.transpose(hedge_error):
     plt.plot(error)
+plt.show()
 
+agent_hedge, actual_hedge = agent.hedge(epsiodes[0][0])
+plt.plot(agent_hedge)
+plt.plot(actual_hedge)
 plt.show()
 
 
