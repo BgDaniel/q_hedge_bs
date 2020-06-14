@@ -7,7 +7,7 @@ from binomial_agent import *
 
 model = BinomialModel(r=.01, sigma=.2, T=1.0, N=4)
 #paths = model.random_paths(20000)
-epsiodes = model.get_episodes(60, 2000)
+epsiodes = model.get_episodes(60, 6000)
 
 def call(K):
     def _call(S):
@@ -21,10 +21,13 @@ hedge_strategy = hedge.hedge()
 #for path in paths:
 #    hedge.roll_out(hedge_strategy, path)
 
-early_stopping = EarlyStopping(0.001, 5)
+early_stopping = EarlyStopping(0.0001, 5)
+
+max_nu_S = None
+min_nu_S = None
 
 agent = BinomialAgent(model, hedge, hedge_strategy, alpha=.65, gamma=.65, epsilon=1.0, epsilon_decay=.85, epsilon_min=0.01, \
-        penalize_factor=1.0, nu_S_l=-1.5, nu_S_u=+1.5, nu_S_steps=1000, call_backs=[early_stopping])
+        penalize_factor=1.0, nu_S_l=-1.0, nu_S_u=+1.0, nu_S_steps=2000, call_backs=[early_stopping])
 
 hedge_error = agent.train(epsiodes)
 

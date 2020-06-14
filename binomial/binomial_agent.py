@@ -47,7 +47,7 @@ class BinomialAgent:
 
 
     def _reward(self, hedge_derivation):
-        return self._penalize_factor * math.exp(- self._penalize_factor * abs(hedge_derivation))
+        return self._penalize_factor * math.exp(- self._penalize_factor * abs(hedge_derivation)) - (self._penalize_factor - 1.0)
 
     def _update_q_(self, current_state, next_state, action, reward):
         Q = self._q_for(current_state)[action]                               
@@ -134,6 +134,9 @@ class BinomialAgent:
                     # update q_table
                     self._update_q_(current_state, next_state, i_S_new, reward)
 
+                    # correct hedge
+                    hedge[i+1]=hedge_actual[i+1]
+
                     # update state
                     current_state = [self._to_state(path, i + 1), i_S_new]
 
@@ -188,3 +191,4 @@ class BinomialAgent:
 
         return agent_hedge, actual_hedge
 
+math
