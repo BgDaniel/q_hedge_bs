@@ -41,13 +41,20 @@ class Player:
 
         return free_positions
 
-class State():
+class State(object):
     def __init__(self, grid, player, next_position, game_over, winner):
-        #self._grid = grid
+        if type(grid) != list:
+            self._grid = grid.tolist()
+        else:
+            self._grid = grid
         self._player = player
         self._next_position = next_position
         self._game_over = game_over
         self._winner = winner
+
+    @staticmethod
+    def from_json(dict):
+        return State(dict['_grid'], dict['_player'], dict['_next_position'], dict['_game_over'], dict['_winner'])
 
 class StateEncoder(json.JSONEncoder):
         def default(self, o):
@@ -149,32 +156,32 @@ class FourWins:
 
         return winner
 
-    def get_episodes(self, nb_epsiodes, episode_length, save=None):
+    def get_episodes(self, nb_episodes, episode_length, save=None):
         episodes = []
 
-        for episode in range(0, nb_epsiodes):
+        for episode in range(0, nb_episodes):
             history = []
             for i in range(episode_length):
                 self._reset()
                 self.play()
 
                 if save != None:
-                    history = self.History[0]
+                    path_serialization = os.path.join(os.path.dirname(__file__), "{0}_{1}_{2}_{3}.json".format(save, nb_episodes, episode_length, episode))
+                    if os.path.exists(path_serialization):
+                        with open(path_serialization, 'r') as read_file:
+                            _historyStr = read_file.read()
+                            _history = json.loads(_historyStr)
+                            _history = [State.from_json(_run) for _run in _history]
+                    else:
+                        _historyStr = StateEncoder().encode(self.History)
+                        _history = json.loads(_historyStr)
+                        with open(path_serialization, 'w') as write_file:
+                            json.dump(_history, write_file)
 
-
-                    
-                    historyJSON = StateEncoder().encode(history)
-
-                    path_serialization = os.path.join(os.path.dirname(__file__), save)
-                    with open(path_serialization, 'w') as write_file:
-                        json.dump(historyJSON, write_file)
-
-                history.append(self.History)
+                history.append(_history)
             episodes.append(history)
 
-
-
-        return episodes_A, episodes_B
+        return episodes
 
 
 
@@ -191,6 +198,6 @@ winner = four_wins.play()
 history = four_wins.History
 
 
-episodes_A, episodes_B = four_wins.get_episodes(1, 4, save="episodes\\history.json")
+episodes = four_wins.get_episodes(10, 100, save="episodes\\history")
 
     
