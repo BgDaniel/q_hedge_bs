@@ -181,8 +181,8 @@ class HedgeEuropeanCallBS:
     def episodes(self, nb_episodes):
         episodes = []
         for episode in range(0, nb_episodes):
-            time, B, S, _, _, _, value_analytical = self.hedge()
-            episodes.append([time, B, S, value_analytical])
+            time, B, S, _, delta, _, value_analytical = self.hedge()
+            episodes.append([time, B, S, delta, value_analytical])
 
         return episodes
 

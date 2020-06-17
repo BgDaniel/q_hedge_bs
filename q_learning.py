@@ -69,9 +69,9 @@ class HedgeAgent:
 
     def train(self, episodes):
         for episode in episodes:
-            time, B, S, value = episode[0], episode[1], episode[2], episode[3]
+            time, B, S, delta_real, value = episode[0], episode[1], episode[2], episode[3], episode[4]
             for i in range(0, len(S)):
-                _S, _value = S[i], value[i]
+                _S, _delta_real, _value = S[i], delta_real[i], value[i]
 
                 for j in range(0, len(time)-1):
                     t = time[j]
