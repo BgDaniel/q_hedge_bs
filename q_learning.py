@@ -37,11 +37,11 @@ class Portfolio:
 
 
     def reset(self):
-        self.__init__(self._S0, self._B0, self._delta_0, self._value_0)
+        self.__init__(self._S0, self._B0, self._delta0, self._value0)
 
 class HedgeAgent:
     def __init__(self, portfolio, threshold_hedge_error, delta_lower, delta_upper, delta_steps,
-        epsilon, epsilon_decay, epsilon_min, alpha, alpha_decay, dt):
+        epsilon, epsilon_decay, epsilon_min, alpha, alpha_decay):
         self._portfolio = portfolio
         self._threshold_hedge_error = threshold_hedge_error
         self._state_space = np.zeros((3)) # T X S_T X Delta_T
@@ -56,7 +56,6 @@ class HedgeAgent:
         self._alpha_decay = alpha_decay
         self._model = self._set_up_model()
         self._memory = []
-        self._dt = dt
 
     def _set_up_model(self):
         model = Sequential()
@@ -72,7 +71,7 @@ class HedgeAgent:
         return np.argmax(self._model.predict([t, S_t]))
 
     def _reward(self, value_hedge, value_real):
-        if abs(value_hedge - value_real) < self._threshold_hedge_error * self._dt:
+        if abs(value_hedge - value_real) / value_real < self._threshold_hedge_error:
             return + 1.0
         else:
             return - 1.0
@@ -113,6 +112,6 @@ value0 = hedge.Value0
 portfolio = Portfolio(S0, B0, delta0, value0)
 
 episodes = hedge.episodes(nb_episodes=2)
-hedge_agent = HedgeAgent(portfolio=portfolio, threshold_hedge_error=.1, delta_lower=.0, delta_upper=1.0, delta_steps=100,
-        epsilon=1.0, epsilon_decay=.995, epsilon_min=.03, alpha=.01, alpha_decay=.01, dt=hedge.Dt)
+hedge_agent = HedgeAgent(portfolio=portfolio, threshold_hedge_error=.02, delta_lower=.0, delta_upper=1.0, delta_steps=100,
+        epsilon=1.0, epsilon_decay=.995, epsilon_min=.03, alpha=.01, alpha_decay=.01)
 hedge_agent.train(episodes)
