@@ -22,7 +22,6 @@ class BlackScholesModel:
     def Dt(self):
         return self._dt
 
-
     @property
     def T(self):
         return self._T
@@ -137,12 +136,17 @@ class HedgeEuropeanCallBS:
     def EuropeanCallBS(self):
         return self._europeanCallBS
 
+    @property
+    def Value0(self):
+        return self._value0
+
     def __init__(self, nbSimus, nbSteps, S0, B0, sigma, r, T, N, K):
         self._bs_model = BlackScholesModel(nbSimus, nbSteps, S0, B0, sigma, r, T)
         self._S0 = self._bs_model.S0
         self._B, self._S = self._bs_model.generate_paths()
         self._nbSteps = nbSteps
         self._europeanCallBS = EuropeanCallBS(N, K, T, sigma, r)
+        self._value0 = self._europeanCallBS.price(.0, self._bs_model.S0) 
         self._dt = self._bs_model.Dt
         self._T = self._bs_model.T
         self._nbSimus = self._bs_model.NbSimus
@@ -150,6 +154,7 @@ class HedgeEuropeanCallBS:
     def hedge(self):
         v_B = np.zeros((self._bs_model.NbSimus, self._bs_model.NbSteps))
         v_S = np.zeros((self._bs_model.NbSimus, self._bs_model.NbSteps))
+        time = np.zeros((self._bs_model.NbSteps))
         value_hedge = np.zeros((self._bs_model.NbSimus, self._bs_model.NbSteps))
         value_analytical = np.zeros((self._bs_model.NbSimus, self._bs_model.NbSteps))
 
@@ -164,10 +169,20 @@ class HedgeEuropeanCallBS:
             value_analytical[i_simu,0] = value_hedge_0
 
         for i_time in range(1, self._bs_model.NbSteps):
+            time[i_time] = i_time * self._dt
             for i_simu in range(0, self._bs_model.NbSimus):
                 value_hedge[i_simu,i_time] = v_B[i_simu,i_time-1] * self._B[i_time] + v_S[i_simu,i_time-1] * self._S[i_simu,i_time]
                 v_S[i_simu,i_time] = self._europeanCallBS.delta(i_time * self._bs_model.Dt, self._S[i_simu,i_time])
                 v_B[i_simu,i_time] = (value_hedge[i_simu,i_time]  - v_S[i_simu,i_time] * self._S[i_simu,i_time]) / (self._B[i_time])
                 value_analytical[i_simu,i_time] = self._europeanCallBS.price(i_time * self._bs_model.Dt, self._S[i_simu,i_time])
             
-        return v_B, v_S, value_hedge, value_analytical
+        return time, self._B, self._S, v_B, v_S, value_hedge, value_analytical
+
+    def episodes(self, nb_episodes):
+        episodes = []
+        for episode in range(0, nb_episodes):
+            time, B, S, _, _, _, value_analytical = self.hedge()
+            episodes.append([time, B, S, value_analytical])
+
+        return episodes
+

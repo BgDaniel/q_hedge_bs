@@ -1,111 +1,107 @@
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.optimizers import Adam  
+from collections import deque
 import numpy as np
-import math
 import random as rnd
-from black_scholes import HedgeEuropeanCallBS
-from helpers import *
+import collections
+from four_wins import *
+import random as rnd
+from black_scholes import *
 
-class Agent:
-    def __init__(self, hedge_european_call, max_steps, learning_rate, gamma, epsilon, epsilon_decay, epsilon_min, \
-        nb_steps_S, nb_steps_t, percentile_S, nb_S_lower, nb_S_upper, nb_S_steps):
-        self._hedge_european_call = hedge_european_call
-        self._european_call = hedge_european_call.EuropeanCallBS
-        self._dt = hedge_european_call.Dt
-        self._S = hedge_european_call.S
-        self._S0 = self._hedge_european_call.S0
-        self._B = hedge_european_call.B
-        self._nb_simus = self._hedge_european_call.NbSimus
-        self._nb_steps_S = nb_steps_S
-        self._nb_steps_t = nb_steps_t
-        self._T = hedge_european_call.T
-        self._delta_t = float(self._T) / float(nb_steps_t)
-        self._percentile_S = percentile_S
-        self._nb_S_lower = nb_S_lower
-        self._nb_S_upper = nb_S_upper
-        self._nb_S_steps = nb_S_steps                
-        self._max_steps = max_steps
-        self._learning_rate = learning_rate
-        self._gamma = gamma
+class Portfolio:    
+    def __init__(self, S_0, B_0, delta_0, value_0):
+        self._S = S_0
+        self._B = B_0
+        self._delta = delta_0
+        self._value = value_0
+        self._b = (value_0 - delta_0 * S_0) / B_0
+
+    def update(self, S, B):
+        self._S = S
+        self._B = B
+        self._value = self.value()
+
+    def value(self):
+        return self._delta * self._S + self._b * self._B
+
+    def rebalance(self, delta_new):
+        value = self.value()
+        self._delta = delta_new
+        self._b = (value - self._delta * self._S) / self._B
+
+class HedgeAgent:
+    def __init__(self, portfolio, threshold_hedge_error, delta_lower, delta_upper, delta_steps,
+        epsilon, epsilon_decay, epsilon_min, alpha, alpha_decay):
+        self._portfolio = portfolio
+        self._threshold_hedge_error = threshold_hedge_error
+        self._state_space = np.zeros((3)) # T X S_T X Delta_T
+        self._delta_lower = delta_lower
+        self._delta_upper = delta_upper
+        self._delta_steps = delta_steps
+        self._action_space = np.linspace(delta_lower, delta_upper, delta_steps)
         self._epsilon = epsilon
-        self._epsilon_min = epsilon_min,
-        self._epilson_decay = epsilon_decay
+        self._epsilon_decay = epsilon_decay
+        self._epsilon_min = epsilon_min
+        self._alpha = alpha
+        self._alpha_decay = alpha_decay
+        self._model = self._set_up_model()
+        self._memory = []
 
-        self._B_int, self._S_int = self.interpolate()
-        self._S_mapped = self.map_to_state_space()
+    def _set_up_model(self):
+        model = Sequential()
+        model.add(Dense(24, input_dim=2, activation='tanh'))
+        model.add(Dense(48, activation='tanh'))
+        model.add(Dense(1, activation='linear'))
+        model.compile(loss='mse', optimizer=Adam(lr=self._alpha, decay=self._alpha_decay))
+        return model
 
-        self._actions = np.linspace(self._nb_S_lower, self._nb_S_upper, self._nb_S_steps)
-        self._q_table = np.zeros((self._nb_steps_t,self._nb_steps_S,self._nb_S_steps))
+    def _delta(self, t, S_t):
+        if (np.random.random() <= self._epsilon):
+            return rnd.choice(self._action_space)
+        return np.argmax(self._model.predict([t, S_t]))
 
-    def interpolate(self):
-        S_int = np.zeros((self._nb_steps_t, self._nb_simus))
-        B_int = np.zeros((self._nb_steps_t))
+    def _reward(self, value_hedge, value_real):
+        if abs(value_hedge - value_real) < self._threshold_hedge_error:
+            return + 1.0
+        else:
+            return - 1.0
 
-        for i_time in range(0, self._nb_steps_t):
-            S_int[i_time] = interpol_values_S(self._S, i_time * self._delta_t, self._dt)
-            B_int[i_time] = interpol_values_B(self._B, i_time * self._delta_t, self._dt)
+    def train(self, episodes):
+        for episode in episodes:
+            time, B, S, value = episode[0], episode[1], episode[2], episode[3]
+            for i in range(0, len(S)):
+                _S, _value = S[i], value[i]
 
-        return B_int, S_int
+                for j in range(0, len(time)-1):
+                    t = time[j]
+                    delta = self._delta(t, _S[j])
+                    self._portfolio.rebalance(delta)
 
-    def map_to_state_space(self):
-        S_mapped = np.zeros((self._nb_steps_t, self._nb_simus))
-        percentiles = np.linspace(self._percentile_S, 1.0 - self._percentile_S, num=self._nb_steps_S)
+                    self._portfolio.update(_S[j+1], B[j+1])
 
-        for i_time in range(1, self._nb_steps_t):
-            S = self._S_int[i_time]
-            states = np.array([np.percentile(S, 100.0 * perc) for perc in percentiles])            
-            
-            for j_simu in range(0, self._nb_simus):
-                q = float((np.array([S <= S[j_simu]])).sum()) / float(self._nb_simus)
-                s = np.array([percentiles <= q]).sum()
-                S_mapped[i_time,j_simu] = s - 1
+                    value_next_hedge = self._portfolio.value()
+                    value_next_real = _value[j+1]
+                    reward = self._reward(value_next_hedge, value_next_real)
 
-        return S_mapped
+                    self._memory.append([t, _S[j], delta, reward])
 
-    def train(self):
-        for i_path, path in enumerate(self._S):
-            nb_B = np.zeros((self._nb_steps_t))
-            nb_S = np.zeros((self._nb_steps_t))
-            value_hedge = np.zeros((self._nb_steps_t))
-            value_hedge[0] = self._european_call.price(.0, self._S0) 
-            action = 0
+                    if reward == - 1.0:
+                        break                    
 
-            if rnd.uniform(0, 1) > self._epsilon:
-                action = np.argmax(self._q_table[0:self._S_mapped[0:i_path]])
-            else:
-                action = rnd.randint(0, len(self._actions) - 1)
-                nb_S[0] = self._actions[action]
-
-            nb_B[0] = (value_hedge[0] - nb_S[0] * self._S[i_path,0]) / self._B[0]
-
-            for i_time in range(1, self._nb_steps_t):
-                S = self._S_int
-                
-                value_hedge[i_time] = nb_S[i_time-1] * S[i_time, i_path] + nb_B[i_time-1] * self._B_int[i_time]
-                value_hedge_real = self._european_call.price( i_time * self._delta_t, S[i_time, i_path]) 
-
-                # compute reward
-                hedge_loss = value_hedge_real - value_hedge[i_time]
-                reward = 1.0 - math.exp(- 3.0 * math.abs(hedge_loss))
-
-                # update q_table
-                self._q_table[0:self._S_mapped[0:i_path]:action] = (1.0 - self._learning_rate) * self._q_table[0:self._S_mapped[0:i_path]:action] \
-                    + self._learning_rate * (reward + self._gamma * )
-                
-                nb_S = .0
-
-                if rnd.uniform(0, 1) > self._epsilon:
-                    action = np.argmax(qtable[state, :])
-                else:
-                    nb_S[i_time] = self._actions(rnd(0, len(self._actions) - 1))
-
-                nb_B[i_time] = (value_hedge[0] - nb_S[i_time] * self._S[i_path,i_time]) / self._B[i_time]
-
-     
-
-            if self._epsilon >= self._epsilon_min:
+            if self._epsilon > self._epsilon_min:
                 self._epsilon *= self._epsilon_decay
 
+S0 = 1.0
+B0 = 1.0
 
+hedge = HedgeEuropeanCallBS(nbSimus=100, nbSteps=100, S0=S0, B0=B0, sigma=0.2, r=.01, T=1.0, N=1.0, K=.9)
 
- 
+delta0 = .5
+value0 = hedge.Value0
+portfolio = Portfolio(S0, B0, delta0, value0)
 
-
+episodes = hedge.episodes(nb_episodes=2)
+hedge_agent = HedgeAgent(portfolio=portfolio, threshold_hedge_error=.01, delta_lower=.0, delta_upper=1.0, delta_steps=100,
+        epsilon=1.0, epsilon_decay=.995, epsilon_min=.03, alpha=.01, alpha_decay=.01)
+hedge_agent.train(episodes)
