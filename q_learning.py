@@ -11,11 +11,16 @@ from black_scholes import *
 
 class Portfolio:    
     def __init__(self, S_0, B_0, delta_0, value_0):
+        self._S0 = S_0
         self._S = S_0
+        self._B0 = B_0
         self._B = B_0
+        self._delta0 = delta_0
         self._delta = delta_0
+        self._value0 = value0
         self._value = value_0
-        self._b = (value_0 - delta_0 * S_0) / B_0
+        self._b0 = (value_0 - delta_0 * S_0) / B_0
+        self._b = self._b0
 
     def update(self, S, B):
         self._S = S
@@ -29,6 +34,10 @@ class Portfolio:
         value = self.value()
         self._delta = delta_new
         self._b = (value - self._delta * self._S) / self._B
+
+
+    def reset(self):
+        self.__init__(self._S0, self._B0, self._delta_0, self._value_0)
 
 class HedgeAgent:
     def __init__(self, portfolio, threshold_hedge_error, delta_lower, delta_upper, delta_steps,
@@ -72,6 +81,7 @@ class HedgeAgent:
         for episode in episodes:
             time, B, S, delta_real, value = episode[0], episode[1], episode[2], episode[3], episode[4]
             for i in range(0, len(S)):
+                self._portfolio.reset()
                 _S, _delta_real, _value = S[i], delta_real[i], value[i]
 
                 for j in range(0, len(time)-1):
@@ -103,6 +113,6 @@ value0 = hedge.Value0
 portfolio = Portfolio(S0, B0, delta0, value0)
 
 episodes = hedge.episodes(nb_episodes=2)
-hedge_agent = HedgeAgent(portfolio=portfolio, threshold_hedge_error=.01, delta_lower=.0, delta_upper=1.0, delta_steps=100,
+hedge_agent = HedgeAgent(portfolio=portfolio, threshold_hedge_error=.1, delta_lower=.0, delta_upper=1.0, delta_steps=100,
         epsilon=1.0, epsilon_decay=.995, epsilon_min=.03, alpha=.01, alpha_decay=.01, dt=hedge.Dt)
 hedge_agent.train(episodes)
