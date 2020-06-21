@@ -101,7 +101,7 @@ class StateEncoder(json.JSONEncoder):
                 _attr.pop('_next_state', None)
                 return _attr
             else:
-                return json.JSONEncoder.default(self, object)
+                return json.JSONEncoder.default(self, o)
 
 class FourWins:
     @property

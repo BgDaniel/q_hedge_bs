@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 import pandas as pd
 import os
+import json
 
 class BlackScholesModel:
     @property
@@ -103,6 +104,41 @@ class EuropeanCallBS:
     def delta(self, t, S):
         return self._N * norm.cdf(self._d1(t, S)) 
 
+class Episodes:
+    @property
+    def Time(self):
+        return self._time
+
+    @property
+    def B(self):
+        return self._B
+
+    @property
+    def S(self):
+        return self._S
+
+    @property
+    def Deltas(self):
+        return self._deltas
+
+    @property
+    def Values(self):
+        return self._values
+
+    def __init__(self, time, B, S, deltas, values):
+        self._time = time.tolist()
+        self._B = B.tolist()
+        self._S = [s.tolist() for s in S]
+        self._deltas = [delta.tolist() for delta in deltas]
+        self._values = [value.tolist() for value in values]
+
+class EpisodesEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Episodes):
+            return o.__dict__
+        else:
+            return json.JSONEncoder.default(self, o)
+
 class HedgeEuropeanCallBS:
     @property
     def S(self):
@@ -178,11 +214,35 @@ class HedgeEuropeanCallBS:
             
         return time, self._B, self._S, v_B, v_S, value_hedge, value_analytical
 
-    def episodes(self, nb_episodes):
-        episodes = []
-        for episode in range(0, nb_episodes):
-            time, B, S, _, delta, _, value_analytical = self.hedge()
-            episodes.append([time, B, S, delta, value_analytical])
+    def episodes(self, nb_episodes, save=False):
+        if save:
+            path_serialization = os.path.join(os.path.dirname(__file__), "cache_episodes\\episodes.json")
+
+            if os.path.exists(path_serialization):
+                with open(path_serialization, 'r') as read_file:
+                    _episodesStr = read_file.read()
+                    return json.loads(_episodesStr)
+
+        time, B = None, None
+        S, deltas, values = [], [], []
+
+        for episode in range(0, nb_episodes):            
+            _time, _B, _S, _, _deltas, _, _values_analytical = self.hedge()
+            if episode == 0:
+                time, B = _time, _B
+            S.append(_S)
+            deltas.append(_deltas)
+            values.append(_values_analytical)
+
+        episodes = Episodes(time, B, S, deltas, values)
+
+        if save:
+            _episodesStr = EpisodesEncoder().encode(episodes)
+            _episodes = json.loads(_episodesStr)
+            path_serialization = os.path.join(os.path.dirname(__file__), "cache_episodes\\episodes.json")
+            with open(path_serialization, 'w') as write_file:
+                json.dump(_episodes, write_file)
+
 
         return episodes
 

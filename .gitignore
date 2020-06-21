@@ -139,6 +139,7 @@ cython_debug/
 
 # csv
 *.csv
+*.csv/
 
 # json
 *.json
